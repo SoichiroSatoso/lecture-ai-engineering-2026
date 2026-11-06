@@ -92,6 +92,7 @@ def make_quiz(lecture:int) -> str:
         return f"第{lecture}回の用語は用語集にありません。"
 
     word = random.choice(words)
+    print(f"[TOOL CALLED] make_quiz(lecture={lecture})")
     return (
         f"問題: 「{word['term']}」とは何ですか？\n"
         f"答え: {word['definition']}"
