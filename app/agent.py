@@ -3,6 +3,7 @@
 使い方:
     uv run python -m app.agent "LoRAとQLoRAの違いは？"
     uv run python -m app.agent --trace "LoRAとQLoRAの違いは？"   # ツール呼び出しを表示
+    uv run python -m app.agent --include-neighbors --trace "LoRAとQLoRAの違いは？"  # 前後1ページも検索
     uv run python -m app.agent --graph --trace "LoRAとQLoRAの違いは？"  # 検索からグラフをたどって回答
     uv run python -m app.agent --tree --trace "LoRAとQLoRAの違いは？"  # 目次をたどって回答
     uv run python -m app.agent --full-context --trace "LoRAとQLoRAの違いは？"  # 全資料を一度に渡す
@@ -177,6 +178,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="学習支援エージェントに質問する")
     parser.add_argument("question", nargs="?")
     parser.add_argument("--trace", action="store_true", help="ツール呼び出しを表示する")
+    parser.add_argument("--include-neighbors", action="store_true",
+                        help="検索ヒットに前後1ページを追加する（通常検索のみ）")
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--mcp", action="store_true", help="第5回: ツールを MCP サーバー（app/mcp_servers.json）から受け取る")
     modes.add_argument("--graph", action="store_true", help="検索結果からグラフをたどり、候補ページを読んで答える")
@@ -185,13 +188,17 @@ def main() -> None:
     parser.add_argument("--list-tools", action="store_true", help="モデルに見えるツール一覧を表示して終了する（APIキー不要）")
     args = parser.parse_args()
 
+    if args.include_neighbors and (args.mcp or args.graph or args.tree or args.full_context):
+        parser.error("--include-neighbors は通常検索モードでのみ使えます")
+
     target = build_mcp_agent() if args.mcp else agent
     mode = nullcontext()
     if args.tree:
         mode = target.override(instructions=TREE_INSTRUCTIONS, tools=[tools.browse_tree])
     elif args.graph:
         mode = target.override(instructions=GRAPH_INSTRUCTIONS, tools=[tools.search_graph])
-    with mode:
+    search_options = tools.force_search_neighbors() if args.include_neighbors else nullcontext()
+    with mode, search_options:
         if args.list_tools:
             if args.full_context:
                 with target.override(tools=[]):

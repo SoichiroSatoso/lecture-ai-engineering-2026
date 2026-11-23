@@ -5,6 +5,8 @@
 """
 
 import json
+from contextlib import contextmanager
+from contextvars import ContextVar
 from functools import cache
 from pathlib import Path
 
@@ -12,6 +14,16 @@ from app.config import api_error_message
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 MAX_RESULTS = 3
+_FORCE_SEARCH_NEIGHBORS = ContextVar("force_search_neighbors", default=False)
+
+
+@contextmanager
+def force_search_neighbors():
+    token = _FORCE_SEARCH_NEIGHBORS.set(True)
+    try:
+        yield
+    finally:
+        _FORCE_SEARCH_NEIGHBORS.reset(token)
 
 
 @cache
@@ -81,17 +93,23 @@ def get_lecture_summary(lecture: int) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def search_materials(query: str) -> str:
+def search_materials(query: str, include_neighbors: bool = False) -> str:
     """第1〜3回の本講義資料を検索し、関連ページの本文・タイトル・ページ番号を返す。
 
-    queryに調べたい内容を指定する。
+    queryに調べたい内容を指定する。include_neighborsをtrueにすると、
+    各ヒットに前後1ページを追加する。
     """
     from google.genai.errors import APIError
     import sqlite3
     from app.retrieval import search
 
     try:
-        return json.dumps({"results": search(query)}, ensure_ascii=False)
+        return json.dumps({
+            "results": search(
+                query,
+                include_neighbors=include_neighbors or _FORCE_SEARCH_NEIGHBORS.get(),
+            )
+        }, ensure_ascii=False)
     except (ValueError, FileNotFoundError, sqlite3.Error) as e:
         return json.dumps({"error": str(e), "results": []}, ensure_ascii=False)
     except APIError as e:

@@ -34,6 +34,21 @@ def test_search_reports_not_found():
     assert "見つかりませんでした" in tools.search_glossary("存在しない用語xyz")
 
 
+def test_search_materials_can_force_neighbor_pages(monkeypatch):
+    calls = []
+
+    def search(query, include_neighbors=False):
+        calls.append((query, include_neighbors))
+        return []
+
+    monkeypatch.setattr("app.retrieval.search", search)
+    json.loads(tools.search_materials("質問"))
+    with tools.force_search_neighbors():
+        json.loads(tools.search_materials("質問"))
+
+    assert calls == [("質問", False), ("質問", True)]
+
+
 def test_lecture_summary():
     assert "エージェント" in tools.get_lecture_summary(3)
     assert "まだありません" in tools.get_lecture_summary(99)
